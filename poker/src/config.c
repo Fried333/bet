@@ -372,11 +372,12 @@ void bet_parse_blockchain_config_ini_file()
 			strncpy(blockchain_cli, iniparser_getstring(ini, "blockchain:blockchain_cli", "chips-cli"),
 				sizeof(blockchain_cli));
 			if (!((strcmp(blockchain_cli, chips_cli) == 0) ||
-			      (strcmp(blockchain_cli, verus_chips_cli) == 0))) {
+			      (strcmp(blockchain_cli, verus_chips_cli) == 0) ||
+			      (strstr(blockchain_cli, "verus") != NULL && strstr(blockchain_cli, "chips") != NULL))) {
 				dlg_warn(
-					"The blockchain client configured in ./config/blockchain_config.ini is not in the supported list of clients, so setting it do default chips-cli");
+					"The blockchain client configured is not in the supported list of clients, setting to default: verus -chain=chips");
 				memset(blockchain_cli, 0x00, sizeof(blockchain_cli));
-				strncpy(blockchain_cli, chips_cli, sizeof(blockchain_cli));
+				strncpy(blockchain_cli, verus_chips_cli, sizeof(blockchain_cli));
 			}
 		}
 	}
