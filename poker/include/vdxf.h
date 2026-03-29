@@ -144,6 +144,12 @@ key is represented as chips.vrsc::poker.sg777z.cashiers.
 #define P_DECODED_CARD_KEY "chips.vrsc::poker.sg777z.p_decoded_card"
 
 /*
+* p_showdown_cards: Player publishes hole cards at showdown for hand evaluation
+* { "hole1": <card_value>, "hole2": <card_value> }
+*/
+#define P_SHOWDOWN_CARDS_KEY "chips.vrsc::poker.sg777z.p_showdown_cards"
+
+/*
 * t_game_info {
 * t_game_ids : 256 bit unique string in hex
 * game_info : Holds the info of the gaming state

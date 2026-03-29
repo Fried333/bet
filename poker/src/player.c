@@ -655,12 +655,33 @@ int32_t handle_game_state_player(char *table_id)
 		break;
 	case G_SHOWDOWN:
 		dlg_info("═══════════════════════════════════════════");
-		dlg_info("  🏆 SHOWDOWN - Game Complete!              ");
+		dlg_info("  SHOWDOWN - Game Complete!");
 		dlg_info("═══════════════════════════════════════════");
 		// Display final cards
 		for (int i = 0; i < hand_size && i < p_local_state.cards_decoded_count; i++) {
 			if (p_local_state.decoded_cards[i] >= 0) {
 				dlg_info("  Card %d: %s", i + 1, get_card_name(p_local_state.decoded_cards[i]));
+			}
+		}
+		// Publish hole cards to on-chain identity for dealer hand evaluation
+		{
+			char str[65];
+			int32_t h1 = p_local_state.decoded_cards[0];
+			int32_t h2 = p_local_state.decoded_cards[1];
+			if (h1 >= 0 && h2 >= 0) {
+				cJSON *showdown_cards = cJSON_CreateObject();
+				cJSON_AddNumberToObject(showdown_cards, "hole1", h1);
+				cJSON_AddNumberToObject(showdown_cards, "hole2", h2);
+				cJSON *out = poker_append_key_json(player_config.verus_pid,
+					get_key_data_vdxf_id(P_SHOWDOWN_CARDS_KEY,
+						bits256_str(str, p_deck_info.game_id)),
+					showdown_cards, true);
+				if (out) {
+					dlg_info("Published hole cards for showdown: %s, %s",
+						get_card_name(h1), get_card_name(h2));
+				} else {
+					dlg_error("Failed to publish hole cards for showdown");
+				}
 			}
 		}
 		break;

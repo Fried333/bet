@@ -503,12 +503,42 @@ int32_t handle_game_state(struct table *t)
 		retval = verus_handle_round_betting(t->table_id, dcv_vars);
 		break;
 	case G_SHOWDOWN:
-		dlg_info("Showdown - determining winners and pot distribution");
+		dlg_info("Showdown - waiting for players to reveal hole cards...");
 		{
 			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
 			unsigned long scores[CARDS_MAXPLAYERS] = { 0 };
 			unsigned long max_score = 0;
 			int32_t no_of_winners = 0;
+
+			// Wait for all non-folded players to publish showdown cards
+			if (game_id_str) {
+				int32_t retries = 0;
+				while (retries < 30) {  // Wait up to ~60 seconds
+					int32_t all_revealed = 1;
+					for (int32_t i = 0; i < num_of_players; i++) {
+						int32_t player_folded = 0;
+						for (int32_t r = 0; r < CARDS_MAXROUNDS; r++) {
+							if (dcv_vars->bet_actions[i][r] == fold) {
+								player_folded = 1;
+								break;
+							}
+						}
+						if (player_folded) continue;
+						cJSON *p_showdown = get_cJSON_from_id_key_vdxfid_from_height(player_ids[i],
+							get_key_data_vdxf_id(P_SHOWDOWN_CARDS_KEY, game_id_str), g_start_block);
+						if (!p_showdown) {
+							all_revealed = 0;
+							break;
+						}
+					}
+					if (all_revealed) break;
+					dlg_info("Waiting for players to publish hole cards... (%d/30)", retries + 1);
+					sleep(2);
+					retries++;
+				}
+			}
+
+			dlg_info("Evaluating hands and determining winners");
 
 			// Read board cards (community cards) from on-chain data
 			int32_t board[5] = { -1, -1, -1, -1, -1 };
@@ -544,24 +574,21 @@ int32_t handle_game_state(struct table *t)
 					continue;
 				}
 
-				// Read player's hole cards from their decoded card data
+				// Read player's hole cards from their showdown reveal
 				int32_t hole[2] = { -1, -1 };
 				if (game_id_str) {
-					cJSON *p_decoded = get_cJSON_from_id_key_vdxfid_from_height(player_ids[i],
-						get_key_data_vdxf_id(P_DECODED_CARD_KEY, game_id_str), g_start_block);
-					if (p_decoded) {
-						int32_t card_type = jint(p_decoded, "card_type");
-						int32_t card_val = jint(p_decoded, "card_value");
-						if (card_type == hole_card) {
-							if (hole[0] == -1)
-								hole[0] = card_val;
-							else
-								hole[1] = card_val;
-						}
+					cJSON *p_showdown = get_cJSON_from_id_key_vdxfid_from_height(player_ids[i],
+						get_key_data_vdxf_id(P_SHOWDOWN_CARDS_KEY, game_id_str), g_start_block);
+					if (p_showdown) {
+						hole[0] = jint(p_showdown, "hole1");
+						hole[1] = jint(p_showdown, "hole2");
+						dlg_info("Player %d hole cards from showdown: %d, %d", i, hole[0], hole[1]);
+					} else {
+						dlg_warn("Player %d hasn't published showdown cards yet", i);
 					}
 				}
 
-				// Also check card_values array (populated during card reveal)
+				// Fallback: check card_values array
 				if (hole[0] == -1 && card_values[i][0] >= 0) hole[0] = card_values[i][0];
 				if (hole[1] == -1 && card_values[i][1] >= 0) hole[1] = card_values[i][1];
 
