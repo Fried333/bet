@@ -155,7 +155,8 @@ static inline void fcontract_iter(uint128_t t[5],int32_t flag)
     for (i=0; i<4; i++)
         t[i+1] += t[i] >> 51, t[i] &= mask;
     if ( flag != 0 )
-        t[0] += 19 * (t[4] >> 51); t[4] &= mask;
+        t[0] += 19 * (t[4] >> 51);
+    t[4] &= mask;
 }
 
 // donna: Take a fully reduced polynomial form number and contract it into a little-endian, 32-byte array
