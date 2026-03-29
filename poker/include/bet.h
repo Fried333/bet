@@ -289,6 +289,7 @@ extern bits256 game_id;
 
 extern int32_t hole_cards_drawn, community_cards_drawn, flop_cards_drawn, turn_card_drawn, river_card_drawn;
 extern int32_t card_matrix[CARDS_MAXPLAYERS][hand_size];
+extern int32_t card_values[CARDS_MAXPLAYERS][hand_size];
 extern int32_t turn, no_of_cards, no_of_rounds, no_of_bets;
 
 bits256 xoverz_donna(bits256 a);

@@ -10,6 +10,7 @@
 #include "config.h"
 #include "poker_vdxf.h"
 #include "storage.h"
+#include "poker.h"
 
 struct d_deck_info_struct d_deck_info;
 struct game_meta_info_struct game_meta_info;
@@ -503,12 +504,34 @@ int32_t handle_game_state(struct table *t)
 		break;
 	case G_SHOWDOWN:
 		dlg_info("Showdown - determining winners and pot distribution");
-		// For now, split pot among players who didn't fold
-		// TODO: Implement proper hand evaluation
 		{
-			int32_t active_players = 0;
+			char *game_id_str = poker_get_key_str(t->table_id, T_GAME_ID_KEY);
+			unsigned long scores[CARDS_MAXPLAYERS] = { 0 };
+			unsigned long max_score = 0;
+			int32_t no_of_winners = 0;
+
+			// Read board cards (community cards) from on-chain data
+			int32_t board[5] = { -1, -1, -1, -1, -1 };
+			if (game_id_str) {
+				cJSON *board_cards = get_cJSON_from_id_key_vdxfid_from_height(t->table_id,
+					get_key_data_vdxf_id(T_BOARD_CARDS_KEY, game_id_str), g_start_block);
+				if (board_cards) {
+					cJSON *flop = cJSON_GetObjectItem(board_cards, "flop");
+					if (flop && cJSON_GetArraySize(flop) >= 3) {
+						board[0] = cJSON_GetArrayItem(flop, 0)->valueint;
+						board[1] = cJSON_GetArrayItem(flop, 1)->valueint;
+						board[2] = cJSON_GetArrayItem(flop, 2)->valueint;
+					}
+					cJSON *turn_c = cJSON_GetObjectItem(board_cards, "turn");
+					if (turn_c) board[3] = turn_c->valueint;
+					cJSON *river_c = cJSON_GetObjectItem(board_cards, "river");
+					if (river_c) board[4] = river_c->valueint;
+				}
+			}
+
+			// Evaluate each player's hand
 			for (int32_t i = 0; i < num_of_players; i++) {
-				// Check if player folded in any round
+				// Check if player folded
 				int32_t player_folded = 0;
 				for (int32_t r = 0; r < CARDS_MAXROUNDS; r++) {
 					if (dcv_vars->bet_actions[i][r] == fold) {
@@ -516,20 +539,88 @@ int32_t handle_game_state(struct table *t)
 						break;
 					}
 				}
-				if (!player_folded) {
-					dcv_vars->winners[i] = 1;
-					active_players++;
+				if (player_folded) {
+					scores[i] = 0;
+					continue;
+				}
+
+				// Read player's hole cards from their decoded card data
+				int32_t hole[2] = { -1, -1 };
+				if (game_id_str) {
+					cJSON *p_decoded = get_cJSON_from_id_key_vdxfid_from_height(player_ids[i],
+						get_key_data_vdxf_id(P_DECODED_CARD_KEY, game_id_str), g_start_block);
+					if (p_decoded) {
+						int32_t card_type = jint(p_decoded, "card_type");
+						int32_t card_val = jint(p_decoded, "card_value");
+						if (card_type == hole_card) {
+							if (hole[0] == -1)
+								hole[0] = card_val;
+							else
+								hole[1] = card_val;
+						}
+					}
+				}
+
+				// Also check card_values array (populated during card reveal)
+				if (hole[0] == -1 && card_values[i][0] >= 0) hole[0] = card_values[i][0];
+				if (hole[1] == -1 && card_values[i][1] >= 0) hole[1] = card_values[i][1];
+
+				// Build 7-card hand: 2 hole + 5 board
+				unsigned char h[7];
+				h[0] = (unsigned char)hole[0];
+				h[1] = (unsigned char)hole[1];
+				h[2] = (unsigned char)board[0];
+				h[3] = (unsigned char)board[1];
+				h[4] = (unsigned char)board[2];
+				h[5] = (unsigned char)board[3];
+				h[6] = (unsigned char)board[4];
+
+				// Verify all cards are valid
+				int32_t valid = 1;
+				for (int32_t c = 0; c < 7; c++) {
+					if (h[c] >= 52) { valid = 0; break; }
+				}
+
+				if (valid) {
+					scores[i] = seven_card_draw_score(h);
+					char handstr[512];
+					set_handstr(handstr, h, 1);
+					dlg_info("Player %d (%s): score=%lu - %s",
+						i, player_ids[i], scores[i], handstr);
+				} else {
+					dlg_warn("Player %d (%s): invalid cards, treating as fold",
+						i, player_ids[i]);
+					scores[i] = 0;
 				}
 			}
-			// Split pot among winners (pot already in CHIPS)
-			if (active_players > 0) {
-				double share = dcv_vars->pot / active_players;
+
+			// Determine winner(s) - highest score wins
+			for (int32_t i = 0; i < num_of_players; i++) {
+				if (scores[i] > max_score)
+					max_score = scores[i];
+			}
+			for (int32_t i = 0; i < num_of_players; i++) {
+				if (scores[i] == max_score && scores[i] > 0) {
+					dcv_vars->winners[i] = 1;
+					no_of_winners++;
+				}
+			}
+
+			// Split pot among winners
+			if (no_of_winners > 0) {
+				double share = dcv_vars->pot / no_of_winners;
 				for (int32_t i = 0; i < num_of_players; i++) {
 					if (dcv_vars->winners[i] == 1) {
 						dcv_vars->win_funds[i] = share;
-						dlg_info("Player %d (%s): wins %.4f CHIPS", 
+						dlg_info("Player %d (%s): WINS %.4f CHIPS",
 							i, player_ids[i], share);
 					}
+				}
+			} else {
+				dlg_error("No winners determined - returning pot to players");
+				double share = dcv_vars->pot / num_of_players;
+				for (int32_t i = 0; i < num_of_players; i++) {
+					dcv_vars->win_funds[i] = share;
 				}
 			}
 		}
