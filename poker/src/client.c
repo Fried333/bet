@@ -971,8 +971,12 @@ int32_t bet_player_frontend(struct lws *wsi, cJSON *argjson)
 	char *method = NULL;
 
 	method = jstr(argjson,"method");
+	if (!method) {
+		dlg_warn("Player WebSocket message missing 'method' field");
+		return ERR_JSON_PARSING;
+	}
 	switchs(method) {
-		dlg_info("\033[32m[◄ FROM GUI]\033[0m %s", cJSON_Print(argjson));
+		dlg_info("[FROM GUI] %s", cJSON_Print(argjson));
 		cases("backend_status")
 			bet_player_process_be_status();
 			break;
@@ -1105,10 +1109,16 @@ int32_t lws_callback_http_player_write(struct lws *wsi, enum lws_callback_reason
 		if (!lws_is_final_fragment(wsi))
 			break;
 		argjson = cJSON_Parse(lws_buf_1);
-
+		if (!argjson) {
+			dlg_error("Failed to parse WebSocket message as JSON");
+			memset(lws_buf_1, 0x00, sizeof(lws_buf_1));
+			lws_buf_length_1 = 0;
+			break;
+		}
 		if ((retval = bet_player_frontend(wsi, argjson)) != OK) {
 			dlg_error("%s", bet_err_str(retval));
 		}
+		cJSON_Delete(argjson);
 		memset(lws_buf_1, 0x00, sizeof(lws_buf_1));
 		lws_buf_length_1 = 0;
 
@@ -1198,10 +1208,16 @@ int32_t lws_callback_http_player(struct lws *wsi, enum lws_callback_reasons reas
 		if (!lws_is_final_fragment(wsi))
 			break;
 		argjson = cJSON_Parse(lws_buf_1);
-
+		if (!argjson) {
+			dlg_error("Failed to parse WebSocket message as JSON");
+			memset(lws_buf_1, 0x00, sizeof(lws_buf_1));
+			lws_buf_length_1 = 0;
+			break;
+		}
 		if ((retval = bet_player_frontend(wsi, argjson)) != OK) {
 			dlg_error("%s", bet_err_str(retval));
 		}
+		cJSON_Delete(argjson);
 		memset(lws_buf_1, 0x00, sizeof(lws_buf_1));
 		lws_buf_length_1 = 0;
 

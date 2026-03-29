@@ -203,6 +203,10 @@ int32_t bet_dcv_frontend(struct lws *wsi, cJSON *argjson)
 	char *rendered = NULL, *method = NULL;
 
 	method = jstr(argjson, "method");
+	if (!method) {
+		dlg_warn("WebSocket message missing 'method' field");
+		return 1;
+	}
 	dlg_info("method::%s\n", method);
 	if (strcmp(method, "game") == 0) {
 		retval = bet_game(wsi, argjson);
@@ -255,9 +259,16 @@ int lws_callback_http_dummy(struct lws *wsi, enum lws_callback_reasons reason, v
 		if (!lws_is_final_fragment(wsi))
 			break;
 		argjson = cJSON_Parse(lws_buf);
+		if (!argjson) {
+			dlg_error("Failed to parse WebSocket message as JSON");
+			memset(lws_buf, 0x00, sizeof(lws_buf));
+			lws_buf_length = 0;
+			break;
+		}
 		if (bet_dcv_frontend(wsi, argjson) != 0) {
 			dlg_warn("Failed to process the host command");
 		}
+		cJSON_Delete(argjson);
 		memset(lws_buf, 0x00, sizeof(lws_buf));
 		lws_buf_length = 0;
 		break;

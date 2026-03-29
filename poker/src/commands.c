@@ -1827,6 +1827,29 @@ end:
 
 // Lightning Network code removed - process_ln_data() no longer used
 
+/* SECURITY: Shell-escape a string by wrapping in single quotes.
+ * Single quotes within the string are escaped as '\'' */
+static char *shell_escape(const char *str)
+{
+	if (!str) return strdup("''");
+	size_t len = strlen(str);
+	/* Worst case: every char is a single quote -> 4x expansion + 2 outer quotes + null */
+	char *escaped = malloc(len * 4 + 3);
+	if (!escaped) return NULL;
+	char *p = escaped;
+	*p++ = '\'';
+	for (size_t i = 0; i < len; i++) {
+		if (str[i] == '\'') {
+			*p++ = '\''; *p++ = '\\'; *p++ = '\''; *p++ = '\'';
+		} else {
+			*p++ = str[i];
+		}
+	}
+	*p++ = '\'';
+	*p = '\0';
+	return escaped;
+}
+
 int32_t make_command(int argc, char **argv, cJSON **argjson)
 {
 	FILE *fp = NULL;
@@ -1838,7 +1861,7 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		return ERR_ARGS_NULL;
 	}
 	for (int32_t i = 0; i < argc; i++) {
-		cmd_size += strlen(argv[i]);
+		cmd_size += strlen(argv[i]) * 4 + 4; /* account for shell escaping */
 	}
 
 	command = calloc(cmd_size, sizeof(char));
@@ -1847,9 +1870,17 @@ int32_t make_command(int argc, char **argv, cJSON **argjson)
 		return retval;
 	}
 
-	for (int32_t i = 0; i < argc; i++) {
-		strcat(command, argv[i]);
-		strcat(command, " ");
+	/* SECURITY: Shell-escape each argument to prevent command injection.
+	 * argv[0] is the command itself (from whitelist), remaining args are escaped. */
+	strcat(command, argv[0]);
+	strcat(command, " ");
+	for (int32_t i = 1; i < argc; i++) {
+		char *escaped = shell_escape(argv[i]);
+		if (escaped) {
+			strcat(command, escaped);
+			strcat(command, " ");
+			free(escaped);
+		}
 	}
 	dlg_info("command :: %s\n", command);
 	// Lightning Network support removed - lightning-cli commands no longer supported
