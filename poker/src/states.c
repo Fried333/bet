@@ -291,6 +291,21 @@ int32_t bet_dcv_round_betting_response(cJSON *argjson, struct privatebet_info *b
 	bet_amount = jint(argjson, "invoice_amount");
 	min_amount = jint(argjson, "min_amount");
 
+	/* SECURITY: Validate player ID and round are within bounds */
+	if (playerid < 0 || playerid >= bet->maxplayers) {
+		dlg_error("Invalid playerid %d (max %d)", playerid, bet->maxplayers);
+		return ERR_INVALID_PLAYER_ID;
+	}
+	if (round < 0 || round >= CARDS_MAXROUNDS) {
+		dlg_error("Invalid round %d (max %d)", round, CARDS_MAXROUNDS);
+		return ERR_BET_AMOUNTS_MISMATCH;
+	}
+	/* SECURITY: Reject negative bet amounts */
+	if (bet_amount < 0) {
+		dlg_error("Negative bet amount %d from player %d", bet_amount, playerid);
+		return ERR_BET_AMOUNTS_MISMATCH;
+	}
+
 	vars->betamount[playerid][round] += bet_amount;
 	vars->pot += bet_amount;
 	vars->funds[playerid] -= bet_amount;

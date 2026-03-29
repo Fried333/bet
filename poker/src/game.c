@@ -735,11 +735,15 @@ int32_t verus_process_betting_action(char *table_id, struct privatebet_vars *var
 	double amount = jdouble(action_info, "amount");  // Amount in CHIPS
 	int32_t playerid = vars->turni;
 	double available = vars->funds[playerid];
-	
-	dlg_info("═══════════════════════════════════════════");
-	dlg_info("  Player %d (%s): %s %.4f CHIPS (available: %.4f)", playerid, player_ids[playerid], action, amount, available);
-	dlg_info("═══════════════════════════════════════════");
-	
+
+	/* SECURITY: Reject negative bet amounts */
+	if (amount < 0.0) {
+		dlg_error("Negative bet amount %.4f from player %d - rejecting", amount, playerid);
+		return ERR_BET_AMOUNTS_MISMATCH;
+	}
+
+	dlg_info("Player %d (%s): %s %.4f CHIPS (available: %.4f)", playerid, player_ids[playerid], action, amount, available);
+
 	// Validate: if player tries to bet more than they have, treat as all-in
 	if (amount > available && strcmp(action, "fold") != 0 && strcmp(action, "check") != 0) {
 		dlg_info("  ⚠️ Bet %.4f exceeds available %.4f - converting to ALL-IN", amount, available);

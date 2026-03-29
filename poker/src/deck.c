@@ -56,7 +56,7 @@ void blind_deck_b(bits256 *r, int32_t n, struct pair256 *blinder)
 	dlg_info("Cashier blinding the deck");
 	for (int32_t i = 0; i < n; i++) {
 		dlg_info("Dealer card::%s", bits256_str(hexstr, r[i]));
-		dlg_info("BV::%s", bits256_str(hexstr, blinder[i].priv));
+		/* SECURITY: Blinding value logging removed - do not log private keys */
 		r[i] = fmul_donna(blinder[i].priv, r[i]);
 		dlg_info("Blinded card::%s", bits256_str(hexstr, r[i]));
 	}

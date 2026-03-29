@@ -279,10 +279,13 @@ int32_t gfshare_init_sharenrs(uint8_t sharenrs[255], uint8_t *orig, int32_t m, i
 			dlg_info("%d ", valid[i]);
 		dlg_info("valid");
 		for (i = 0; i < m; i++) {
-			r = rand() % n;
+			/* SECURITY: Use cryptographic RNG instead of predictable rand() */
+			uint32_t rval;
+			OS_randombytes((uint8_t *)&rval, sizeof(rval));
+			r = rval % n;
 			while ((j = valid[r]) == 0) {
-				// dlg_info("i.%d j.%d m.%d n.%d r.%d\n",i,j,m,n,r);
-				r = rand() % n;
+				OS_randombytes((uint8_t *)&rval, sizeof(rval));
+				r = rval % n;
 			}
 			sharenrs[i] = j;
 			valid[r] = 0;

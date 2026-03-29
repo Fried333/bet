@@ -243,6 +243,13 @@ int lws_callback_http_dummy(struct lws *wsi, enum lws_callback_reasons reason, v
 
 	switch (reason) {
 	case LWS_CALLBACK_RECEIVE:
+		/* SECURITY: Bounds check to prevent buffer overflow */
+		if (lws_buf_length + len > sizeof(lws_buf) - 1) {
+			dlg_error("WebSocket message too large (%d + %zu > %zu) - dropping", lws_buf_length, len, sizeof(lws_buf));
+			memset(lws_buf, 0x00, sizeof(lws_buf));
+			lws_buf_length = 0;
+			break;
+		}
 		memcpy(lws_buf + lws_buf_length, in, len);
 		lws_buf_length += len;
 		if (!lws_is_final_fragment(wsi))

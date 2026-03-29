@@ -119,6 +119,16 @@ int32_t reveal_bv(char *table_id)
 	player_id = jint(game_state_info, "player_id");
 	card_id = jint(game_state_info, "card_id");
 
+	/* SECURITY: Validate player_id and card_id are within bounds */
+	if (player_id != -1 && (player_id < 0 || player_id >= CARDS_MAXPLAYERS)) {
+		dlg_error("reveal_bv: invalid player_id %d (max %d)", player_id, CARDS_MAXPLAYERS);
+		return ERR_INVALID_PLAYER_ID;
+	}
+	if (card_id < 0 || card_id >= CARDS_MAXCARDS) {
+		dlg_error("reveal_bv: invalid card_id %d (max %d)", card_id, CARDS_MAXCARDS);
+		return ERR_CARD_DECODING_FAILED;
+	}
+
 	game_id_str = poker_get_key_str(table_id, T_GAME_ID_KEY);
 
 	bv_info = cJSON_CreateArray();

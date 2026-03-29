@@ -142,10 +142,11 @@ void bet_check_cashier_nodes()
 		}
 	}
 
+	/* SECURITY: Never reduce threshold below minimum - refuse to operate instead */
 	if (live_notaries < threshold_value) {
-		dlg_warn("Cashier available:: %d \n Cashier needed ::%d\n so readjusting cashiers needed to :: %d",
-			 live_notaries, threshold_value, live_notaries);
-		threshold_value = live_notaries;
+		dlg_error("Insufficient cashier nodes: %d available, %d required. Refusing to lower threshold.",
+			 live_notaries, threshold_value);
+		/* Do NOT reduce threshold_value - this would allow single-signer attacks */
 	}
 }
 
@@ -183,15 +184,13 @@ int32_t bet_send_status(struct cashier *cashier_info, char *id)
 
 int32_t bet_process_lock_in_tx(cJSON *argjson, struct cashier *cashier_info)
 {
-	int32_t retval = OK;
-	cJSON *status = NULL;
-
-	retval = bet_run_query(jstr(argjson, "sql_query"));
-	status = cJSON_CreateObject();
-	cJSON_AddStringToObject(status, "method", "query_status");
-	cJSON_AddNumberToObject(status, "status", retval);
-// Nanomsg removed - no longer used
-	return retval;
+	/* SECURITY: Raw SQL execution from network input removed.
+	 * This was a critical SQL injection vulnerability - arbitrary SQL
+	 * could be executed by sending a crafted "sql_query" field.
+	 * Lock-in transactions should be validated and processed through
+	 * proper parameterized queries instead. */
+	dlg_error("bet_process_lock_in_tx: raw SQL execution disabled for security");
+	return ERR_SQL;
 }
 
 int32_t bet_cashier_process_raw_msig_tx(cJSON *argjson, struct cashier *cashier_info)
@@ -1230,6 +1229,14 @@ int lws_callback_http_cashier(struct lws *wsi, enum lws_callback_reasons reason,
 
 	switch (reason) {
 	case LWS_CALLBACK_RECEIVE:
+		/* SECURITY: Bounds check to prevent buffer overflow */
+		if (lws_cashier_buf_length + len > sizeof(lws_cashier_buf) - 1) {
+			dlg_error("Cashier WebSocket message too large (%d + %zu > %zu) - dropping",
+				lws_cashier_buf_length, len, sizeof(lws_cashier_buf));
+			memset(lws_cashier_buf, 0x00, sizeof(lws_cashier_buf));
+			lws_cashier_buf_length = 0;
+			break;
+		}
 		memcpy(lws_cashier_buf + lws_cashier_buf_length, in, len);
 		lws_cashier_buf_length += len;
 		if (!lws_is_final_fragment(wsi))

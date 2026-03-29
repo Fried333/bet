@@ -1093,6 +1093,13 @@ int32_t lws_callback_http_player_write(struct lws *wsi, enum lws_callback_reason
 
 	switch (reason) {
 	case LWS_CALLBACK_RECEIVE:
+		/* SECURITY: Bounds check to prevent buffer overflow */
+		if (lws_buf_length_1 + len > sizeof(lws_buf_1) - 1) {
+			dlg_error("WebSocket message too large (%d + %zu > %zu) - dropping", lws_buf_length_1, len, sizeof(lws_buf_1));
+			memset(lws_buf_1, 0x00, sizeof(lws_buf_1));
+			lws_buf_length_1 = 0;
+			break;
+		}
 		memcpy(lws_buf_1 + lws_buf_length_1, in, len);
 		lws_buf_length_1 += len;
 		if (!lws_is_final_fragment(wsi))
@@ -1133,6 +1140,13 @@ int32_t lws_callback_http_player_read(struct lws *wsi, enum lws_callback_reasons
 
 	switch (reason) {
 	case LWS_CALLBACK_RECEIVE:
+		/* SECURITY: Bounds check to prevent buffer overflow */
+		if (lws_buf_length_1 + len > sizeof(lws_buf_1) - 1) {
+			dlg_error("WebSocket message too large (%d + %zu > %zu) - dropping", lws_buf_length_1, len, sizeof(lws_buf_1));
+			memset(lws_buf_1, 0x00, sizeof(lws_buf_1));
+			lws_buf_length_1 = 0;
+			break;
+		}
 		memcpy(lws_buf_1 + lws_buf_length_1, in, len);
 		lws_buf_length_1 += len;
 		if (!lws_is_final_fragment(wsi))
@@ -1172,6 +1186,13 @@ int32_t lws_callback_http_player(struct lws *wsi, enum lws_callback_reasons reas
 	//dlg_info("callback code::%d\n", (int)reason);
 	switch (reason) {
 	case LWS_CALLBACK_RECEIVE:
+		/* SECURITY: Bounds check to prevent buffer overflow */
+		if (lws_buf_length_1 + len > sizeof(lws_buf_1) - 1) {
+			dlg_error("WebSocket message too large (%d + %zu > %zu) - dropping", lws_buf_length_1, len, sizeof(lws_buf_1));
+			memset(lws_buf_1, 0x00, sizeof(lws_buf_1));
+			lws_buf_length_1 = 0;
+			break;
+		}
 		memcpy(lws_buf_1 + lws_buf_length_1, in, len);
 		lws_buf_length_1 += len;
 		if (!lws_is_final_fragment(wsi))
